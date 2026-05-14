@@ -1,0 +1,25 @@
+import asyncio
+from langgraph_sdk import get_client
+
+client = get_client(url = "http://localhost:2024")
+
+async def main():
+    async for chunk in client.runs.stream(
+        None,
+        assistant_id = "agent",
+        input = {
+            "messages": [
+                {
+                    "role": "human",
+                    "content": "What's the weather like in San Francisco?"
+                }
+            ]
+        }
+    ):
+        print(chunk.data)
+        print("\n\n")
+        # if isinstance(chunk.data, list) and 'type' in chunk.data[0] and chunk.data[0]['type'] == 'AIMessageChunk':
+        #     print(chunk.data[0]['content'])
+
+if __name__ == "__main__":
+    asyncio.run(main())

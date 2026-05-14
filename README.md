@@ -21,7 +21,7 @@ Deployment template for a deep agent built with `create_deep_agent(...)`.
 
 ```bash
 uv sync
-cp .env.example .env
+cp .env .env
 ```
 
 2. Start the dev server:
