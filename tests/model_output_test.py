@@ -14,12 +14,14 @@ async def main():
                     "content": "What's the weather like in San Francisco?"
                 }
             ]
-        }
+        },
+        config = {"configurable": {"user_name": "Qiast.Fy"}},
+        stream_mode = "messages-tuple"  #流式输出
     ):
-        print(chunk.data)
-        print("\n\n")
-        # if isinstance(chunk.data, list) and 'type' in chunk.data[0] and chunk.data[0]['type'] == 'AIMessageChunk':
-        #     print(chunk.data[0]['content'])
+        # print(chunk.data)
+        # print("\n\n")
+        if isinstance(chunk.data, list) and 'type' in chunk.data[0] and chunk.data[0]['type'] == 'AIMessageChunk':
+            print(chunk.data[0]['content'])
 
 if __name__ == "__main__":
     asyncio.run(main())

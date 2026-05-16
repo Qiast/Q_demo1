@@ -9,7 +9,14 @@ class GetUserRelativeArgs(BaseModel):
 def get_user_relative(relation: str) -> str:
     # method2: relaton: Annotated[str, "The relation of the user's relative."]
 
-    """Get the name of user's relative."""
+    """Get the name of user's relative.
+
+    Args:
+        relation: The relation of the user's relative.
+
+    Returns:
+        The name of the user's relative.
+    """
     result = ""
     match relation:
         case "son":

@@ -86,8 +86,19 @@
 #         yield _build_agent(backend=backend)
 #     else:
 #         yield RO_AGENT
+from langchain_core.runnables import RunnableConfig
 from langchain_ollama import ChatOllama
 from langgraph.prebuilt import create_react_agent
+from langgraph.prebuilt.chat_agent_executor import AgentState
+#
+# from deep_agent.tools.tools_three import get_asset
+from langchain_core.messages import AnyMessage
+
+# 使用configurable生成系统提示词
+def system_prompt(state: AgentState, config: RunnableConfig) ->  list[AnyMessage]:
+    user_name = config['configurable'].get('user_name', 'Qiast')
+    system_message = (f'you are a helpful assistant, your master name is {user_name}')
+    return [{'role': 'system', 'content': system_message}] + state['messages']
 
 llm = ChatOllama(
     model = "qwen3.5:4b",
@@ -101,7 +112,5 @@ def get_weather(city: str) -> str:
 graph = create_react_agent(
     llm,
     tools = [get_weather],
-    prompt = """
-    You are a helpful assistant.
-    """,
+    prompt = system_prompt
 )
