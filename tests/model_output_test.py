@@ -11,7 +11,7 @@ async def main():
             "messages": [
                 {
                     "role": "human",
-                    "content": "What's the weather like in San Francisco?"
+                    "content": "How old am I this year?"
                 }
             ]
         },
@@ -21,7 +21,7 @@ async def main():
         # print(chunk.data)
         # print("\n\n")
         if isinstance(chunk.data, list) and 'type' in chunk.data[0] and chunk.data[0]['type'] == 'AIMessageChunk':
-            print(chunk.data[0]['content'])
+            print(chunk.data[0]['content'], end = "", flush = True)
 
 if __name__ == "__main__":
     asyncio.run(main())
