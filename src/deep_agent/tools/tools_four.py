@@ -3,7 +3,10 @@ from typing import Annotated
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool, InjectedToolCallId
+from langgraph.prebuilt import InjectedState
 from langgraph.types import Command
+
+from deep_agent.my_state import CustomState
 
 
 @tool
@@ -28,3 +31,10 @@ def revise_user_info(tool_call_id: Annotated[str, InjectedToolCallId], config: R
         ]
     }
     )
+
+
+@tool
+def greet_user(state: Annotated[CustomState, InjectedState]):
+    """Greeting username and generating congratulation"""
+    username = state['username']
+    return f"Congratulation,{username}!"

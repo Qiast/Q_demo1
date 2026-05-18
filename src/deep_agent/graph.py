@@ -92,8 +92,11 @@ from langgraph.prebuilt import create_react_agent
 from langgraph.prebuilt.chat_agent_executor import AgentState
 # from deep_agent.tools.tools_three import get_asset
 from langchain_core.messages import AnyMessage
-from deep_agent.tools.tools_four import get_user_info
 
+from deep_agent.my_state import CustomState
+from deep_agent.tools.tools_four import get_user_info, greet_user
+
+# checkpointer = InMemorySaver
 
 # 使用configurable生成系统提示词
 def system_prompt(state: AgentState, config: RunnableConfig) ->  list[AnyMessage]:
@@ -112,6 +115,8 @@ def get_weather(city: str) -> str:
 
 graph = create_react_agent(
     llm,
-    tools = [get_weather, get_user_info],
-    prompt = system_prompt
+    tools = [get_weather, get_user_info, greet_user],
+    prompt = system_prompt,
+    state_schema = CustomState
+    # checkpoint = checkpoint
 )
