@@ -39,8 +39,8 @@ def evaluate_joke(state: State):
     """Evaluating joke from State"""
     chain = llm.with_structured_output(Feedback)
     resp = chain.invoke(
-        f'evaluate the humor level of the joke: \n{state['joke']}\n'
-        'Note: Humor should involve element of surprise or clever phrasing'
+        f"evaluate the humor level of the joke: \n{state['joke']}\n"
+        "Note: Humor should involve element of surprise or clever phrasing"
     )
 
     return {
@@ -50,7 +50,7 @@ def evaluate_joke(state: State):
 
 def route_function(state: State):
     """动态路由决策函数"""
-    return 'Ye' if state['funny_or_not'] == 'funny' else "Noo"
+    return "Ye" if state['funny_or_not'] == 'funny' else "Noo"
 
 builer = StateGraph(State)
 
