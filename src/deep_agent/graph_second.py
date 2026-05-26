@@ -52,14 +52,14 @@ def route_function(state: State):
     """动态路由决策函数"""
     return "Ye" if state['funny_or_not'] == 'funny' else "Noo"
 
-builer = StateGraph(State)
+builder = StateGraph(State)
 
-builer.add_node("generator", generate_joke)
-builer.add_node("evaluator", evaluate_joke)
+builder.add_node("generator", generate_joke)
+builder.add_node("evaluator", evaluate_joke)
 
-builer.add_edge(START, "generator")
-builer.add_edge("generator", "evaluator")
-builer.add_conditional_edges(
+builder.add_edge(START, "generator")
+builder.add_edge("generator", "evaluator")
+builder.add_conditional_edges(
     "evaluator",
     route_function,
     {
@@ -68,4 +68,4 @@ builer.add_conditional_edges(
     }
 )
 
-joke_graph = builer.compile()
+joke_graph = builder.compile()

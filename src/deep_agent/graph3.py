@@ -1,8 +1,13 @@
+import os
+from dotenv import load_dotenv
 from typing import Dict, Any, List
 from langchain_core.messages import ToolMessage, AIMessage
 import asyncio
 import json
 from langchain_mcp_adapters.client import MultiServerMCPClient
+from langchain_openai import ChatOpenAI
+from langgraph.graph import MessagesState, StateGraph
+from langgraph.constants import END, START
 
 my12306_mcp_server_config = {
     'url': 'https://mcp.api-inference.modelscope.net/f8f7367c4e4444/mcp',
@@ -19,6 +24,15 @@ mcp_client = MultiServerMCPClient(
         'chart_mcp': chart_mcp_server_config,
         '12306_mcp': my12306_mcp_server_config
     }
+)
+
+load_dotenv()
+
+llm = ChatOpenAI(
+    model = "deepseek-v4-flash",
+    temperature = 0.7,
+    api_key = os.getenv("DEEPSEEK_API_KEY"),
+    base_url = "https://api.deepseek.com"
 )
 
 class BasicToolNode:
@@ -112,3 +126,43 @@ class BasicToolNode:
             return await asyncio.gather( *[_invoke_tool(tool_call) for tool_call in tool_calls])
         except Exception as e:
             raise RuntimeError("failed") from e
+
+class State(MessagesState):
+    pass
+
+def route_tools_function(state: State):
+    """动态路由函数,如果从大模型输出后的AIMessage,中包含有工具调用的请求(指令),就进入到tools节点,否则则结束"""
+    if isinstance(state, list):
+        ai_message = state[-1]
+    elif messages := state.get['message']:
+        ai_message = messages[-1]
+    else:
+        raise ValueError("Invalid input")
+    if hasattr(ai_message, 'tool_calls') and len(ai_message.tool_calls) > 0:
+        return "tools"
+    return END
+
+async def create_graph():
+    tools = await mcp_client.get_tools()
+    builder = StateGraph(State)
+    llm_with_tools = llm.bind_tools()
+
+    async def chatbot(state: State):
+        return {"messages": [await llm_with_tools.ainvoke(state["messages"])]}
+
+    tool_node = BasicToolNode(tools)
+
+    builder.add_node('chatbot', chatbot)
+    builder.add_node('tools', tool_node)
+    builder.add_conditional_edges(
+        "chatbot",
+        route_tools_function,
+        {'tools': tools, END: END}
+    )
+
+    builder.add_edge(START, "chatbot")
+    builder.add_edge("tools", "chatbot")
+
+    return builder.compile()
+
+agent = asyncio.run(create_graph())
