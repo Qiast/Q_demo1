@@ -4,11 +4,13 @@ from typing import Dict, Any, List
 from langchain_core.messages import ToolMessage, AIMessage
 import asyncio
 import json
+from langgraph.types import interrupt
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
+from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.constants import END, START
-from langgraph.types import interrupt
+from langgraph.prebuilt import ToolNode, tools_condition
 
 my12306_mcp_server_config = {
     'url': 'https://mcp.api-inference.modelscope.net/f8f7367c4e4444/mcp',
@@ -67,6 +69,20 @@ class BasicToolNode:
         if not (messages := state.get("messages")):
             raise ValueError("Invalid input")
         message: AIMessage = messages[-1]
+
+        tool_name = message.tool_calls[0].name if message.tool_calls else None
+        if tool_name == "xxx":
+            response = interrupt(
+                f"llm即将调用{tool_name}。请审核并选择:批准(y)或直接给我工具执行的答案。"
+            )
+        if response['answer'] == 'y':
+            pass
+        else:
+            return {"message": [ToolMessage(
+                content=f"停止并给出答案为{response['answer']}",
+                name=tool_name,
+                tool_call_id=message.tool_calls[0]['id']
+            )]}
 
         # 并发执行工具调用
         outputs = await self._execute_tool_calls(message.tool_calls)
@@ -131,17 +147,17 @@ class BasicToolNode:
 class State(MessagesState):
     pass
 
-def route_tools_function(state: State):
-    """动态路由函数,如果从大模型输出后的AIMessage,中包含有工具调用的请求(指令),就进入到tools节点,否则则结束"""
-    if isinstance(state, list):
-        ai_message = state[-1]
-    elif messages := state.get['message']:
-        ai_message = messages[-1]
-    else:
-        raise ValueError("Invalid input")
-    if hasattr(ai_message, 'tool_calls') and len(ai_message.tool_calls) > 0:
-        return "tools"
-    return END
+# def route_tools_function(state: State):
+#     """动态路由函数,如果从大模型输出后的AIMessage,中包含有工具调用的请求(指令),就进入到tools节点,否则则结束"""
+#     if isinstance(state, list):
+#         ai_message = state[-1]
+#     elif messages := state.get['message']:
+#         ai_message = messages[-1]
+#     else:
+#         raise ValueError("Invalid input")
+#     if hasattr(ai_message, 'tool_calls') and len(ai_message.tool_calls) > 0:
+#         return "tools"
+#     return END
 
 async def create_graph():
     tools = await mcp_client.get_tools()
@@ -151,19 +167,94 @@ async def create_graph():
     async def chatbot(state: State):
         return {"messages": [await llm_with_tools.ainvoke(state["messages"])]}
 
-    tool_node = BasicToolNode(tools)
+    # tool_node = BasicToolNode(tools)
+    tool_node = ToolNode(tools)
 
     builder.add_node('chatbot', chatbot)
     builder.add_node('tools', tool_node)
     builder.add_conditional_edges(
         "chatbot",
-        route_tools_function,
-        {'tools': tools, END: END}
+        tools_condition
     )
-
     builder.add_edge(START, "chatbot")
     builder.add_edge("tools", "chatbot")
+    # 设置检查点
+    memory = MemorySaver()
+    return builder.compile(checkpointer = memory, interrupt_before = ['tools'])  #加入人工干预
 
-    return builder.compile()
+# agent = asyncio.run(create_graph())
 
-agent = asyncio.run(create_graph())
+
+async def run_agent():
+    graph = await create_graph()
+    config = {
+        "configurable": {
+            "thread_id": 'red123'
+        }
+    }
+
+    def print_message(event, result):
+        """格式化输出消息"""
+        messages = event.get("messages")
+        if messages:
+            if isinstance(messages, list):
+                message = messages[-1]
+            if message.__class__.__name__ == 'AIMessage':
+                if message.content:
+                    result = message.content
+            msg_repr = message.pretty_repr(html = True)
+            if len(msg_repr) > 1500:
+                msg_repr = msg_repr[:1500] + "..."
+            print(msg_repr)
+        return result
+
+    def get_answer(tool_message, user_answer):
+        """由人工介入，并且给问题一个答案"""
+        tool_name = tool_message.tool_calls[0]['name']
+        answer = (
+            f"人工强制终止了工具:{tool_name}的执行,拒绝的理由是:{user_answer}"
+        )
+        new_message = [
+            ToolMessage(content = answer, tool_call_id = tool_message.tool_calls[0]['id']),
+            AIMessage(content = answer)
+        ]
+
+        # 人工信息添加到state中
+        graph.update_state(
+            config = config,
+            values = {'message': new_message}
+        )
+
+    async def execute_graph(user_input: str) -> str:
+        """执行工作流的函数"""
+        result = ""
+        if user_input.strip().lower() != "y":
+            current_state = graph.get_state(config)
+            if current_state.next:
+                tools_script_message = current_state.values['message'][-1]
+                get_answer(tools_script_message, user_input)
+                message = graph.get_state(config).values['message'][-1]
+                result = message.content
+                return result
+            else:
+                async for chunk in graph.astream({'messages': ('user', user_input)}, config, stream_mode = 'values'):
+                    result = print_message(chunk, result)
+        else:
+            async for chunk in graph.astream(None, config, stream_mode = 'values'):
+                result = print_message(chunk, result)
+
+        current_state = graph.get_state(config)
+        if current_state.next:   #出现工作流中断
+            ai_message = current_state.values['message'][-1]
+            tool_name = ai_message.tool_calls[0]['name']
+            result = f"AI助手马上根据你的要求，执行{tool_name}工具。你是否批准继续执行？输入'y'继续，否则说明理由。"
+
+        return result
+
+    while True:
+        user_input = input("user: ")
+        res = await execute_graph(user_input)
+        print('AI:', res)
+
+if __name__ == '__main__':
+    asyncio.run(run_agent())

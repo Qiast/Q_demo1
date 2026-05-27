@@ -170,7 +170,6 @@ async def create_graph():
 # agent = asyncio.run(create_graph())
 
 
-
 async def run_agent():
     graph = await create_graph()
     config = {
@@ -194,22 +193,53 @@ async def run_agent():
             print(msg_repr)
         return result
 
+    def get_answer(tool_message, user_answer):
+        """由人工介入，并且给问题一个答案"""
+        tool_name = tool_message.tool_calls[0]['name']
+        answer = (
+            f"人工强制终止了工具:{tool_name}的执行,拒绝的理由是:{user_answer}"
+        )
+        new_message = [
+            ToolMessage(content = answer, tool_call_id = tool_message.tool_calls[0]['id']),
+            AIMessage(content = answer)
+        ]
+
+        # 人工信息添加到state中
+        graph.update_state(
+            config = config,
+            values = {'message': new_message}
+        )
+
     async def execute_graph(user_input: str) -> str:
         """执行工作流的函数"""
         result = ""
         if user_input.strip().lower() != "y":
             current_state = graph.get_state(config)
             if current_state.next:
-                pass
+                tools_script_message = current_state.values['message'][-1]
+                get_answer(tools_script_message, user_input)
+                message = graph.get_state(config).values['message'][-1]
+                result = message.content
+                return result
             else:
                 async for chunk in graph.astream({'messages': ('user', user_input)}, config, stream_mode = 'values'):
                     result = print_message(chunk, result)
         else:
             async for chunk in graph.astream(None, config, stream_mode = 'values'):
                 result = print_message(chunk, result)
+
+        current_state = graph.get_state(config)
+        if current_state.next:   #出现工作流中断
+            ai_message = current_state.values['message'][-1]
+            tool_name = ai_message.tool_calls[0]['name']
+            result = f"AI助手马上根据你的要求，执行{tool_name}工具。你是否批准继续执行？输入'y'继续，否则说明理由。"
+
         return result
 
     while True:
         user_input = input("user: ")
         res = await execute_graph(user_input)
         print('AI:', res)
+
+if __name__ == '__main__':
+    asyncio.run(run_agent())
