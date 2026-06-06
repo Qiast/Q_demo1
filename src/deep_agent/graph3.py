@@ -8,7 +8,6 @@ from langchain_mcp_adapters.client import MultiServerMCPClient
 from langchain_openai import ChatOpenAI
 from langgraph.graph import MessagesState, StateGraph
 from langgraph.constants import END, START
-from langgraph.types import interrupt
 
 my12306_mcp_server_config = {
     'url': 'https://mcp.api-inference.modelscope.net/f8f7367c4e4444/mcp',

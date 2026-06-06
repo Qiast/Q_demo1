@@ -18,7 +18,6 @@ def generate_joke(state: State):
         if state.get("feedback", None)
         else f"generate a joke about {state['topic']}"
     )
-
     # resp = llm.invoke(prompt)
     chain = llm | StrOutputParser()
     resp = chain.invoke(prompt)
